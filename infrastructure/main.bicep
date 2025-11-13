@@ -31,6 +31,9 @@ param azureOpenAiEndpoint string = ''
 @description('Azure OpenAI Deployment Name')
 param azureOpenAiDeployment string = 'gpt-4o'
 
+@description('Deployment timestamp')
+param deploymentTimestamp string = utcNow('yyyy-MM-dd')
+
 // Common tags
 var commonTags = {
   Application: 'AI-Icarus-V2'
@@ -38,7 +41,7 @@ var commonTags = {
   ManagedBy: 'Bicep'
   Cloud: cloudEnvironment
   Framework: 'Microsoft-Agent-Framework'
-  CreatedDate: utcNow('yyyy-MM-dd')
+  CreatedDate: deploymentTimestamp
 }
 
 // Resource naming with environment suffix
