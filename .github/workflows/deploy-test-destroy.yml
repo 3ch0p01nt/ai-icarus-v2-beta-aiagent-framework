@@ -1,0 +1,383 @@
+name: Deploy → Test → Destroy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AZURE_CLOUD: AzureUSGovernment
+  RESOURCE_GROUP_PREFIX: ci-icarus-test
+  LOCATION: usgovvirginia
+
+jobs:
+  deploy:
+    name: 🚀 Deploy to Azure Gov
+    runs-on: ubuntu-latest
+    outputs:
+      resource-group: ${{ steps.deploy.outputs.resource_group }}
+      backend-url: ${{ steps.deploy.outputs.backend_url }}
+      frontend-url: ${{ steps.deploy.outputs.frontend_url }}
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔐 Azure Gov Login
+        uses: azure/login@v1
+        with:
+          environment: 'AzureUSGovernment'
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: 🏷️ Generate unique resource group name
+        id: generate-rg
+        run: |
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          RG_NAME="${{ env.RESOURCE_GROUP_PREFIX }}-${TIMESTAMP}"
+          echo "resource_group=$RG_NAME" >> $GITHUB_OUTPUT
+          echo "Generated resource group: $RG_NAME"
+
+      - name: 🏗️ Deploy Infrastructure
+        id: deploy
+        run: |
+          echo "Creating resource group: ${{ steps.generate-rg.outputs.resource_group }}"
+          az group create \
+            --name ${{ steps.generate-rg.outputs.resource_group }} \
+            --location ${{ env.LOCATION }} \
+            --tags Environment=CI Project=AI-Icarus-V2 ManagedBy=GitHub-Actions
+
+          echo "Deploying Bicep template..."
+          az deployment group create \
+            --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
+            --template-file infrastructure/main.bicep \
+            --parameters environment=ci \
+                        cloudEnvironment=${{ env.AZURE_CLOUD }} \
+                        azureAdClientId=${{ secrets.AZURE_AD_CLIENT_ID }} \
+                        azureAdClientSecret=${{ secrets.AZURE_AD_CLIENT_SECRET }} \
+                        azureAdTenantId=${{ secrets.AZURE_AD_TENANT_ID }} \
+                        azureOpenAiEndpoint=${{ secrets.AZURE_OPENAI_ENDPOINT }} \
+                        azureOpenAiDeployment=${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
+
+          echo "Extracting outputs..."
+          BACKEND_URL=$(az deployment group show \
+            --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
+            --name main \
+            --query properties.outputs.backendUrl.value -o tsv)
+
+          FRONTEND_URL=$(az deployment group show \
+            --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
+            --name main \
+            --query properties.outputs.frontendUrl.value -o tsv)
+
+          echo "backend_url=$BACKEND_URL" >> $GITHUB_OUTPUT
+          echo "frontend_url=$FRONTEND_URL" >> $GITHUB_OUTPUT
+          echo "resource_group=${{ steps.generate-rg.outputs.resource_group }}" >> $GITHUB_OUTPUT
+
+          echo "✅ Infrastructure deployed successfully"
+          echo "   Backend: $BACKEND_URL"
+          echo "   Frontend: $FRONTEND_URL"
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Deploy Backend
+        run: |
+          cd backend
+
+          echo "Installing dependencies..."
+          pip install -r requirements.txt
+
+          echo "Creating deployment package..."
+          zip -r deploy.zip . -x "*.git*" "*__pycache__*" "*.venv*" "*tests*"
+
+          echo "Getting App Service name..."
+          APP_NAME=$(az webapp list \
+            --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
+            --query "[0].name" -o tsv)
+
+          echo "Deploying to App Service: $APP_NAME"
+          az webapp deployment source config-zip \
+            --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
+            --name $APP_NAME \
+            --src deploy.zip
+
+          echo "✅ Backend deployed successfully"
+
+      - name: ⚛️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: 🎨 Deploy Frontend
+        run: |
+          cd frontend
+
+          echo "Installing dependencies..."
+          npm ci
+
+          echo "Building frontend..."
+          VITE_API_URL=${{ steps.deploy.outputs.backend_url }} \
+          VITE_AZURE_CLIENT_ID=${{ secrets.AZURE_AD_CLIENT_ID }} \
+          VITE_AZURE_CLOUD=${{ env.AZURE_CLOUD }} \
+          npm run build
+
+          echo "Getting Static Web App name..."
+          SWA_NAME=$(az staticwebapp list \
+            --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
+            --query "[0].name" -o tsv)
+
+          echo "Deploying to Static Web App: $SWA_NAME"
+          # Deploy using Azure Static Web Apps CLI
+          npx @azure/static-web-apps-cli deploy \
+            --app-location ./dist \
+            --deployment-token ${{ secrets.SWA_DEPLOYMENT_TOKEN }}
+
+          echo "✅ Frontend deployed successfully"
+
+  health-check:
+    name: 🏥 Health Check
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⏳ Wait for services to start
+        run: |
+          echo "Waiting 90 seconds for services to fully start..."
+          sleep 90
+
+      - name: 🔍 Check backend health
+        run: |
+          HEALTH_URL="${{ needs.deploy.outputs.backend-url }}/health"
+          echo "Checking backend health: $HEALTH_URL"
+
+          for i in {1..10}; do
+            RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" $HEALTH_URL || echo "000")
+
+            if [ "$RESPONSE" == "200" ]; then
+              echo "✅ Backend health check passed (attempt $i)"
+              exit 0
+            fi
+
+            echo "⏳ Health check attempt $i/10 returned HTTP $RESPONSE, retrying..."
+            sleep 10
+          done
+
+          echo "❌ Backend health check failed after 10 attempts"
+          exit 1
+
+      - name: 🌐 Check frontend accessibility
+        run: |
+          FRONTEND_URL="${{ needs.deploy.outputs.frontend-url }}"
+          echo "Checking frontend: $FRONTEND_URL"
+
+          for i in {1..5}; do
+            RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" $FRONTEND_URL || echo "000")
+
+            if [ "$RESPONSE" == "200" ]; then
+              echo "✅ Frontend accessible (attempt $i)"
+              exit 0
+            fi
+
+            echo "⏳ Frontend check attempt $i/5 returned HTTP $RESPONSE, retrying..."
+            sleep 10
+          done
+
+          echo "❌ Frontend not accessible after 5 attempts"
+          exit 1
+
+      - name: 🔗 Check API endpoints
+        run: |
+          API_URL="${{ needs.deploy.outputs.backend-url }}/api/config"
+          echo "Checking API config endpoint: $API_URL"
+
+          RESPONSE=$(curl -s $API_URL)
+
+          if echo "$RESPONSE" | grep -q "azureEnvironment"; then
+            echo "✅ API endpoints responding correctly"
+            echo "Response: $RESPONSE"
+          else
+            echo "❌ API endpoints not responding as expected"
+            echo "Response: $RESPONSE"
+            exit 1
+          fi
+
+  integration-tests:
+    name: 🧪 Integration Tests
+    needs: [deploy, health-check]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install dependencies
+        run: |
+          pip install pytest pytest-asyncio requests python-dotenv
+          pip install -r backend/requirements.txt
+
+      - name: 🧪 Run integration tests
+        env:
+          API_BASE_URL: ${{ needs.deploy.outputs.backend-url }}
+          TEST_USER_TOKEN: ${{ secrets.TEST_USER_TOKEN }}
+          AZURE_CLOUD: ${{ env.AZURE_CLOUD }}
+        run: |
+          echo "Running integration tests against: $API_BASE_URL"
+          pytest tests/integration/ -v --tb=short --junit-xml=test-results.xml
+
+      - name: 📊 Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: test-results.xml
+
+  e2e-tests:
+    name: 🎭 E2E Tests (Playwright)
+    needs: [deploy, health-check]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: ⚛️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: 📦 Install dependencies
+        run: |
+          cd tests/e2e
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: 🎭 Run Playwright tests
+        env:
+          BASE_URL: ${{ needs.deploy.outputs.frontend-url }}
+          API_URL: ${{ needs.deploy.outputs.backend-url }}
+          TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+        run: |
+          cd tests/e2e
+          echo "Running E2E tests against: $BASE_URL"
+          npx playwright test --reporter=html,junit
+
+      - name: 📊 Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/e2e/playwright-report/
+
+      - name: 📊 Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: tests/e2e/test-results/
+
+  destroy:
+    name: 🗑️ Destroy Resources
+    needs: [deploy, health-check, integration-tests, e2e-tests]
+    if: success()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🔐 Azure Gov Login
+        uses: azure/login@v1
+        with:
+          environment: 'AzureUSGovernment'
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: 🗑️ Delete resource group
+        run: |
+          RG_NAME="${{ needs.deploy.outputs.resource-group }}"
+          echo "Deleting resource group: $RG_NAME"
+
+          az group delete \
+            --name $RG_NAME \
+            --yes \
+            --no-wait
+
+          echo "✅ Resource group deletion initiated (async)"
+
+      - name: ✅ Verify deletion
+        run: |
+          RG_NAME="${{ needs.deploy.outputs.resource-group }}"
+
+          echo "Waiting for deletion to complete..."
+          for i in {1..30}; do
+            if ! az group exists --name $RG_NAME 2>/dev/null; then
+              echo "✅ Resource group successfully deleted"
+              exit 0
+            fi
+            echo "⏳ Waiting for deletion... ($i/30)"
+            sleep 10
+          done
+
+          echo "⚠️ Deletion taking longer than expected (still in progress)"
+          echo "Resource group will be deleted asynchronously"
+
+  notify-success:
+    name: ✅ Notify Success
+    needs: [destroy]
+    if: success()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🎉 Success notification
+        run: |
+          echo "========================================"
+          echo "✅ CI/CD CYCLE COMPLETED SUCCESSFULLY!"
+          echo "========================================"
+          echo ""
+          echo "Pipeline stages completed:"
+          echo "  1. ✅ Infrastructure deployed"
+          echo "  2. ✅ Backend deployed"
+          echo "  3. ✅ Frontend deployed"
+          echo "  4. ✅ Health checks passed"
+          echo "  5. ✅ Integration tests passed"
+          echo "  6. ✅ E2E tests passed"
+          echo "  7. ✅ Resources destroyed"
+          echo ""
+          echo "All tests passed! Application is ready for production."
+          echo "========================================"
+
+  notify-failure:
+    name: ❌ Notify Failure
+    needs: [deploy, health-check, integration-tests, e2e-tests]
+    if: failure()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🚨 Failure notification
+        run: |
+          echo "========================================"
+          echo "❌ CI/CD CYCLE FAILED"
+          echo "========================================"
+          echo ""
+          echo "Deployment information:"
+          echo "  Resource Group: ${{ needs.deploy.outputs.resource-group }}"
+          echo "  Backend URL: ${{ needs.deploy.outputs.backend-url }}"
+          echo "  Frontend URL: ${{ needs.deploy.outputs.frontend-url }}"
+          echo ""
+          echo "⚠️  RESOURCES LEFT RUNNING FOR DEBUGGING"
+          echo ""
+          echo "To investigate:"
+          echo "  1. Check GitHub Actions logs above"
+          echo "  2. Access deployed resources at URLs above"
+          echo "  3. Check App Service logs in Azure Portal"
+          echo ""
+          echo "Manual cleanup when done:"
+          echo "  az cloud set --name AzureUSGovernment"
+          echo "  az login"
+          echo "  az group delete --name ${{ needs.deploy.outputs.resource-group }}"
+          echo ""
+          echo "========================================"
