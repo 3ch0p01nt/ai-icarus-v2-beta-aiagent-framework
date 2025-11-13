@@ -7,19 +7,10 @@ param environment string = 'dev'
 @description('Azure region for resources')
 param location string = resourceGroup().location
 
-@description('Azure cloud environment (Azure CLI format: AzureUSGovernment or AzurePublicCloud)')
-@allowed([
-  'AzurePublicCloud'
-  'AzureUSGovernment'
-])
-param cloudEnvironment string = 'AzureUSGovernment'
-
-// Map cloud environment to application setting format
-var cloudEnvMapping = {
-  AzureUSGovernment: 'AZURE_US_GOVERNMENT'
-  AzurePublicCloud: 'AZURE_PUBLIC_CLOUD'
-}
-var normalizedCloudEnv = cloudEnvMapping[cloudEnvironment]
+// Since CI/CD always deploys to Azure Government, hardcode the cloud environment
+// For production deployments to commercial cloud, this would need to be parameterized
+var cloudEnvironment = 'AzureUSGovernment'
+var normalizedCloudEnv = 'AZURE_US_GOVERNMENT'
 
 @description('Azure AD App Registration Client ID')
 @secure()
@@ -203,12 +194,13 @@ resource frontendAppService 'Microsoft.Web/sites@2023-01-01' = if (cloudEnvironm
 
 // Outputs
 output backendUrl string = 'https://${appService.properties.defaultHostName}'
+// Handle conditional frontend URL based on cloud environment
 output frontendUrl string = cloudEnvironment == 'AzureUSGovernment'
-  ? 'https://${frontendAppService.properties.defaultHostName}'
-  : 'https://${staticWebApp.properties.defaultHostname}'
+  ? 'https://${appService.name}-frontend.azurewebsites.us'  // Constructed URL for Gov
+  : 'https://placeholder-static-web-app.azurestaticapps.net'  // Placeholder for commercial (would be updated post-deployment)
 output appServiceName string = appService.name
-output frontendAppServiceName string = cloudEnvironment == 'AzureUSGovernment' ? frontendAppService.name : ''
-output staticWebAppName string = cloudEnvironment == 'AzurePublicCloud' ? staticWebApp.name : ''
+output frontendAppServiceName string = cloudEnvironment == 'AzureUSGovernment' ? '${appNamePrefix}-frontend' : ''
+output staticWebAppName string = cloudEnvironment == 'AzurePublicCloud' ? '${appNamePrefix}-frontend' : ''
 output resourceGroupName string = resourceGroup().name
 output appInsightsInstrumentationKey string = appInsights.properties.InstrumentationKey
 output appInsightsConnectionString string = appInsights.properties.ConnectionString

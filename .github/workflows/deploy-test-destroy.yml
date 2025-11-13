@@ -51,7 +51,6 @@ jobs:
             --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
             --template-file infrastructure/main.bicep \
             --parameters environment=ci \
-                        cloudEnvironment=${{ env.AZURE_CLOUD }} \
                         azureAdClientId=${{ secrets.AZURE_AD_CLIENT_ID }} \
                         azureAdClientSecret=${{ secrets.AZURE_AD_CLIENT_SECRET }} \
                         azureAdTenantId=${{ secrets.AZURE_AD_TENANT_ID }} \
