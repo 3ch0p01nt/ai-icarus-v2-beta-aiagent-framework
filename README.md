@@ -9,6 +9,8 @@ Multi-cloud Azure application (Commercial + Government) with automated CI/CD pip
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-React-61DAFB)
 
+> **Status**: Repository created, CI/CD configured. Secrets required for deployment.
+
 ---
 
 ## 🎯 Overview
