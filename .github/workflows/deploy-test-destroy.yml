@@ -6,7 +6,6 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_CLOUD: AzureUSGovernment
   RESOURCE_GROUP_PREFIX: ci-icarus-test
   LOCATION: usgovvirginia
 
