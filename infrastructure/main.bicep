@@ -7,12 +7,19 @@ param environment string = 'dev'
 @description('Azure region for resources')
 param location string = resourceGroup().location
 
-@description('Azure cloud environment')
+@description('Azure cloud environment (Azure CLI format: AzureUSGovernment or AzurePublicCloud)')
 @allowed([
   'AzurePublicCloud'
   'AzureUSGovernment'
 ])
 param cloudEnvironment string = 'AzureUSGovernment'
+
+// Map cloud environment to application setting format
+var cloudEnvMapping = {
+  AzureUSGovernment: 'AZURE_US_GOVERNMENT'
+  AzurePublicCloud: 'AZURE_PUBLIC_CLOUD'
+}
+var normalizedCloudEnv = cloudEnvMapping[cloudEnvironment]
 
 @description('Azure AD App Registration Client ID')
 @secure()
@@ -101,7 +108,7 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
         }
         {
           name: 'AZURE_CLOUD_ENVIRONMENT'
-          value: cloudEnvironment
+          value: normalizedCloudEnv
         }
         {
           name: 'AZURE_OPENAI_ENDPOINT'
