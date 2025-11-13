@@ -44,6 +44,19 @@ var commonTags = {
 // Resource naming with environment suffix
 var appNamePrefix = 'ai-icarus-${environment}-${uniqueString(resourceGroup().id)}'
 
+// Frontend URL for CORS configuration
+var frontendAppName = '${appNamePrefix}-frontend'
+var frontendUrl = 'https://${frontendAppName}.azurewebsites.us'
+
+// Environment-specific CORS configuration
+var corsConfig = environment == 'ci' ? {
+  allowedOrigins: ['*']
+  supportCredentials: false
+} : {
+  allowedOrigins: [frontendUrl, 'http://localhost:5173', 'http://localhost:3000']
+  supportCredentials: true
+}
+
 // App Service Plan (Linux, Python 3.11)
 resource appServicePlan 'Microsoft.Web/serverfarms@2023-01-01' = {
   name: '${appNamePrefix}-plan'
@@ -73,12 +86,7 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
       http20Enabled: true
-      cors: {
-        allowedOrigins: [
-          '*'  // Will be restricted to frontend URL in production
-        ]
-        supportCredentials: true
-      }
+      cors: corsConfig
       appSettings: [
         {
           name: 'WEBSITE_RUN_FROM_PACKAGE'
