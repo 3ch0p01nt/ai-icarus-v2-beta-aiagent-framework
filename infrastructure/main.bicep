@@ -7,9 +7,8 @@ param environment string = 'dev'
 @description('Azure region for resources')
 param location string = resourceGroup().location
 
-// Since CI/CD always deploys to Azure Government, hardcode the cloud environment
-// For production deployments to commercial cloud, this would need to be parameterized
-var cloudEnvironment = 'AzureUSGovernment'
+// Cloud environment configuration
+// CI/CD always deploys to Azure Government
 var normalizedCloudEnv = 'AZURE_US_GOVERNMENT'
 
 @description('Azure AD App Registration Client ID')
@@ -37,7 +36,7 @@ var commonTags = {
   Application: 'AI-Icarus-V2'
   Environment: environment
   ManagedBy: 'Bicep'
-  Cloud: cloudEnvironment
+  Cloud: 'AzureGovernment'
   Framework: 'Microsoft-Agent-Framework'
   CreatedDate: deploymentTimestamp
 }
@@ -153,30 +152,9 @@ resource appServiceAppInsights 'Microsoft.Web/sites/config@2023-01-01' = {
   }
 }
 
-// Static Web App (Frontend - React + TypeScript)
-// Note: Static Web Apps have limited availability in Azure Government
-// Only deploy if in commercial cloud
-resource staticWebApp 'Microsoft.Web/staticSites@2023-01-01' = if (cloudEnvironment == 'AzurePublicCloud') {
-  name: '${appNamePrefix}-frontend'
-  location: location
-  tags: commonTags
-  sku: {
-    name: 'Free'
-    tier: 'Free'
-  }
-  properties: {
-    repositoryUrl: ''  // Will be configured via GitHub Actions
-    branch: 'main'
-    buildProperties: {
-      appLocation: '/frontend'
-      apiLocation: ''
-      outputLocation: 'dist'
-    }
-  }
-}
-
-// For Azure Government, use App Service for frontend instead
-resource frontendAppService 'Microsoft.Web/sites@2023-01-01' = if (cloudEnvironment == 'AzureUSGovernment') {
+// Frontend App Service (React + TypeScript)
+// Using App Service since Static Web Apps not available in Azure Government
+resource frontendAppService 'Microsoft.Web/sites@2023-01-01' = {
   name: '${appNamePrefix}-frontend'
   location: location
   tags: commonTags
@@ -188,19 +166,21 @@ resource frontendAppService 'Microsoft.Web/sites@2023-01-01' = if (cloudEnvironm
       alwaysOn: false
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
+      appSettings: [
+        {
+          name: 'WEBSITE_RUN_FROM_PACKAGE'
+          value: '1'
+        }
+      ]
     }
   }
 }
 
 // Outputs
 output backendUrl string = 'https://${appService.properties.defaultHostName}'
-// Handle conditional frontend URL based on cloud environment
-output frontendUrl string = cloudEnvironment == 'AzureUSGovernment'
-  ? 'https://${appService.name}-frontend.azurewebsites.us'  // Constructed URL for Gov
-  : 'https://placeholder-static-web-app.azurestaticapps.net'  // Placeholder for commercial (would be updated post-deployment)
+output frontendUrl string = 'https://${frontendAppService.properties.defaultHostName}'
 output appServiceName string = appService.name
-output frontendAppServiceName string = cloudEnvironment == 'AzureUSGovernment' ? '${appNamePrefix}-frontend' : ''
-output staticWebAppName string = cloudEnvironment == 'AzurePublicCloud' ? '${appNamePrefix}-frontend' : ''
+output frontendAppServiceName string = frontendAppService.name
 output resourceGroupName string = resourceGroup().name
 output appInsightsInstrumentationKey string = appInsights.properties.InstrumentationKey
 output appInsightsConnectionString string = appInsights.properties.ConnectionString
