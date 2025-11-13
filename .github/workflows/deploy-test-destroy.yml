@@ -118,19 +118,24 @@ jobs:
           echo "Building frontend..."
           VITE_API_URL=${{ steps.deploy.outputs.backend_url }} \
           VITE_AZURE_CLIENT_ID=${{ secrets.AZURE_AD_CLIENT_ID }} \
-          VITE_AZURE_CLOUD=${{ env.AZURE_CLOUD }} \
+          VITE_AZURE_CLOUD=AzureUSGovernment \
           npm run build
 
-          echo "Getting Static Web App name..."
-          SWA_NAME=$(az staticwebapp list \
-            --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
-            --query "[0].name" -o tsv)
+          echo "Creating deployment package..."
+          cd dist
+          zip -r ../deploy.zip .
+          cd ..
 
-          echo "Deploying to Static Web App: $SWA_NAME"
-          # Deploy using Azure Static Web Apps CLI
-          npx @azure/static-web-apps-cli deploy \
-            --app-location ./dist \
-            --deployment-token ${{ secrets.SWA_DEPLOYMENT_TOKEN }}
+          echo "Getting Frontend App Service name..."
+          FRONTEND_APP_NAME=$(az webapp list \
+            --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
+            --query "[?contains(name, 'frontend')].name" -o tsv)
+
+          echo "Deploying to Frontend App Service: $FRONTEND_APP_NAME"
+          az webapp deployment source config-zip \
+            --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
+            --name $FRONTEND_APP_NAME \
+            --src deploy.zip
 
           echo "✅ Frontend deployed successfully"
 
