@@ -156,7 +156,9 @@ resource appServiceAppInsights 'Microsoft.Web/sites/config@2023-01-01' = {
 }
 
 // Static Web App (Frontend - React + TypeScript)
-resource staticWebApp 'Microsoft.Web/staticSites@2023-01-01' = {
+// Note: Static Web Apps have limited availability in Azure Government
+// Only deploy if in commercial cloud
+resource staticWebApp 'Microsoft.Web/staticSites@2023-01-01' = if (cloudEnvironment == 'AzurePublicCloud') {
   name: '${appNamePrefix}-frontend'
   location: location
   tags: commonTags
@@ -175,11 +177,31 @@ resource staticWebApp 'Microsoft.Web/staticSites@2023-01-01' = {
   }
 }
 
+// For Azure Government, use App Service for frontend instead
+resource frontendAppService 'Microsoft.Web/sites@2023-01-01' = if (cloudEnvironment == 'AzureUSGovernment') {
+  name: '${appNamePrefix}-frontend'
+  location: location
+  tags: commonTags
+  properties: {
+    serverFarmId: appServicePlan.id
+    httpsOnly: true
+    siteConfig: {
+      linuxFxVersion: 'NODE|18-lts'
+      alwaysOn: false
+      ftpsState: 'Disabled'
+      minTlsVersion: '1.2'
+    }
+  }
+}
+
 // Outputs
 output backendUrl string = 'https://${appService.properties.defaultHostName}'
-output frontendUrl string = 'https://${staticWebApp.properties.defaultHostname}'
+output frontendUrl string = cloudEnvironment == 'AzureUSGovernment'
+  ? 'https://${frontendAppService.properties.defaultHostName}'
+  : 'https://${staticWebApp.properties.defaultHostname}'
 output appServiceName string = appService.name
-output staticWebAppName string = staticWebApp.name
+output frontendAppServiceName string = cloudEnvironment == 'AzureUSGovernment' ? frontendAppService.name : ''
+output staticWebAppName string = cloudEnvironment == 'AzurePublicCloud' ? staticWebApp.name : ''
 output resourceGroupName string = resourceGroup().name
 output appInsightsInstrumentationKey string = appInsights.properties.InstrumentationKey
 output appInsightsConnectionString string = appInsights.properties.ConnectionString
