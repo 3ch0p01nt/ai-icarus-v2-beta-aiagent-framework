@@ -141,10 +141,6 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
           name: 'WEBSITES_PORT'
           value: '8000'
         }
-        {
-          name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
-          value: 'true'
-        }
       ]
     }
   }
