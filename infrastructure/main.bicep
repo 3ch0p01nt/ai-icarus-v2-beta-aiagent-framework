@@ -90,10 +90,6 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
       appCommandLine: 'python -m gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 600 --worker-class uvicorn.workers.UvicornWorker main:app'
       appSettings: [
         {
-          name: 'WEBSITE_RUN_FROM_PACKAGE'
-          value: '1'
-        }
-        {
           name: 'AZURE_CLIENT_ID'
           value: azureAdClientId
         }
@@ -179,12 +175,7 @@ resource frontendAppService 'Microsoft.Web/sites@2023-01-01' = {
       alwaysOn: false
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
-      appSettings: [
-        {
-          name: 'WEBSITE_RUN_FROM_PACKAGE'
-          value: '1'
-        }
-      ]
+      appSettings: []
     }
   }
 }
