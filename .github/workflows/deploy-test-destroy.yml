@@ -101,9 +101,12 @@ jobs:
           USERNAME=$(echo $CREDS | jq -r '.username')
           PASSWORD=$(echo $CREDS | jq -r '.password')
 
+          # Create base64-encoded auth header to handle special characters in password
+          AUTH_HEADER=$(echo -n "$USERNAME:$PASSWORD" | base64)
+
           echo "Deploying to App Service via ZipDeploy API: $APP_NAME"
           HTTP_STATUS=$(curl -X POST \
-            -u "$USERNAME:$PASSWORD" \
+            -H "Authorization: Basic $AUTH_HEADER" \
             -H "Content-Type: application/zip" \
             --data-binary @deploy.zip \
             -w "%{http_code}" \
@@ -121,7 +124,7 @@ jobs:
           echo "⏳ Waiting for Oryx build to complete..."
           for i in {1..60}; do
             sleep 5
-            STATUS=$(curl -s -u "$USERNAME:$PASSWORD" \
+            STATUS=$(curl -s -H "Authorization: Basic $AUTH_HEADER" \
               "https://$APP_NAME.scm.azurewebsites.us/api/deployments/latest" \
               | jq -r '.status // "unknown"')
 
