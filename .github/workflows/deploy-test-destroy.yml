@@ -79,20 +79,37 @@ jobs:
           echo "   Backend: $BACKEND_URL ($BACKEND_APP_NAME)"
           echo "   Frontend: $FRONTEND_URL"
 
-      - name: 🚀 Deploy Backend with Oryx Build
+      - name: 🚀 Deploy Backend with Oryx Build (Git Push)
         run: |
-          cd backend
-          zip -r deploy.zip .
-
-          echo "Deploying backend to ${{ steps.deploy.outputs.backend_app_name }}"
-          az webapp deploy \
+          # Get deployment credentials
+          DEPLOY_USER=$(az webapp deployment list-publishing-credentials \
             --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
             --name ${{ steps.deploy.outputs.backend_app_name }} \
-            --src-path deploy.zip \
-            --type zip \
-            --async false
+            --query publishingUserName -o tsv)
 
-          echo "✅ Backend deployed - Oryx will build and install dependencies"
+          DEPLOY_PASS=$(az webapp deployment list-publishing-credentials \
+            --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
+            --name ${{ steps.deploy.outputs.backend_app_name }} \
+            --query publishingPassword -o tsv)
+
+          GIT_URL=$(az webapp deployment source config-local-git \
+            --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
+            --name ${{ steps.deploy.outputs.backend_app_name }} \
+            --query url -o tsv)
+
+          # Create temp git repo and push
+          cd backend
+          git init
+          git config user.email "ci@github.com"
+          git config user.name "GitHub Actions"
+          git add .
+          git commit -m "Deploy via Git"
+
+          # Push to Azure (Git deployment triggers Oryx build automatically)
+          git remote add azure "https://${DEPLOY_USER}:${DEPLOY_PASS}@${GIT_URL#https://}"
+          git push azure main:master --force
+
+          echo "✅ Backend deployed via Git - Oryx build triggered automatically"
 
       - name: ⚛️ Setup Node.js
         uses: actions/setup-node@v4
