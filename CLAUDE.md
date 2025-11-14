@@ -371,29 +371,65 @@ VITE_AZURE_CLOUD=AzureUSGovernment
 
 **Last Updated:** 2025-11-14
 
-**Current Status:** Direct deployment testing to Azure Government Cloud
+**Current Status:** Fixed deployment issues - now using ZipDeploy API with Oryx build
 
-**Recent Progress:**
-- Successfully deployed infrastructure to test resource group `rg-icarus-direct-test`
-- Backend URL: `https://ai-icarus-test-64zh3jgmqiqxe-backend.azurewebsites.us`
-- Frontend URL: `https://ai-icarus-test-64zh3jgmqiqxe-frontend.azurewebsites.us`
-- Currently deploying backend code using `az webapp up`
+### Root Cause Analysis (2025-11-14)
 
-**Known Issues:**
-- CI/CD pipeline failing at backend deployment step (startup timeout)
-- Issue appears to be with gunicorn/worker process startup configuration
-- Agent Framework packages may be causing dependency issues
+**Problem:** Backend app failed to start with `ModuleNotFoundError: No module named 'uvicorn'`
 
-**Troubleshooting Attempts:**
-1. ✅ Added gunicorn to requirements.txt
-2. ✅ Configured appCommandLine in Bicep with gunicorn startup
-3. ❌ Added startup.sh script (caused timeout, removed)
-4. ✅ Simplified startup command with `python -m gunicorn`
-5. 🔄 Testing direct deployment to Azure to isolate CI/CD vs app issues
+**Investigation Process:**
+1. Multiple CI/CD pipeline failures at health check step (HTTP 503 errors)
+2. Downloaded and analyzed App Service logs
+3. Found critical error in Docker container logs:
+   ```
+   WARNING: Could not find virtual environment directory /home/site/wwwroot/antenv.
+   WARNING: Could not find package directory /home/site/wwwroot/__oryx_packages__.
+   ModuleNotFoundError: No module named 'uvicorn'
+   ```
 
-**Next Session Should:**
-1. Complete direct deployment testing and verify health endpoint
-2. Fix any remaining startup issues identified during direct deployment
-3. Update CI/CD pipeline configuration based on successful direct deployment
-4. Test complete deployment through GitHub commit
-5. Begin implementing full Agent Framework integration
+**Root Cause:**
+- CI/CD workflow used `az webapp deployment source config-zip`
+- This method deploys the zip file **as-is** without triggering builds
+- Added `SCM_DO_BUILD_DURING_DEPLOYMENT=true` but it had **no effect**
+- Config-zip doesn't support build automation - only works with Git deploys or ZipDeploy API
+- Result: No dependencies were installed, app couldn't start
+
+**Solution Implemented:**
+- Switched to **ZipDeploy API** (`/api/zipdeploy`) which triggers Azure Oryx builds
+- Oryx automatically detects `requirements.txt` and installs dependencies
+- Created PowerShell script (`scripts/deploy-backend.ps1`) for manual deployments
+- Both CI/CD and manual deployments now use the same reliable approach
+
+**Files Changed:**
+- `.github/workflows/deploy-test-destroy.yml` - Uses ZipDeploy API with build polling
+- `scripts/deploy-backend.ps1` - New PowerShell script for manual deployment
+- `CLAUDE.md` - This documentation update
+
+### Recent Progress
+- ✅ Commented out unavailable agent-framework packages from requirements.txt
+- ✅ Identified config-zip vs zipdeploy API issue through log analysis
+- ✅ Implemented ZipDeploy API deployment in CI/CD workflow
+- ✅ Created reusable PowerShell deployment script
+- 🔄 Testing new deployment approach
+
+### Deployment Architecture
+
+**CI/CD Pipeline:**
+1. Create zip of backend code (no dependency pre-installation)
+2. Get publishing credentials via Azure CLI
+3. POST zip to ZipDeploy API endpoint
+4. Oryx detects Python app, installs requirements.txt
+5. Poll deployment status until build completes
+6. Health check verifies app started successfully
+
+**Manual Deployment:**
+```powershell
+.\scripts\deploy-backend.ps1 -ResourceGroupName "my-rg" -AppServiceName "my-app-backend"
+```
+
+### Next Steps
+1. Monitor current CI/CD run to verify ZipDeploy API fix works
+2. Once successful, clean up old failed resource groups
+3. Begin implementing full Agent Framework integration (when packages available in PyPI)
+4. Add real Azure Resource Graph and Log Analytics integration
+5. Implement On-Behalf-Of token flow for user delegation
