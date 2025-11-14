@@ -87,7 +87,7 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
       minTlsVersion: '1.2'
       http20Enabled: true
       cors: corsConfig
-      appCommandLine: 'gunicorn --bind 0.0.0.0:8000 --workers 4 --worker-class uvicorn.workers.UvicornWorker main:app'
+      appCommandLine: 'bash startup.sh'
       appSettings: [
         {
           name: 'WEBSITE_RUN_FROM_PACKAGE'
