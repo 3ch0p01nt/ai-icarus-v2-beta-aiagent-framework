@@ -91,8 +91,12 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
       minTlsVersion: '1.2'
       http20Enabled: true
       cors: corsConfig
-      appCommandLine: 'python -m uvicorn main:app --host 0.0.0.0 --port 8000'
+      appCommandLine: 'gunicorn -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --timeout 600 --access-logfile \'-\' --error-logfile \'-\' main:app'
       appSettings: [
+        {
+          name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
+          value: 'true'
+        }
         {
           name: 'AZURE_CLIENT_ID'
           value: azureAdClientId
