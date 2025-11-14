@@ -369,17 +369,31 @@ VITE_AZURE_CLOUD=AzureUSGovernment
 
 ## Session Notes
 
-**Last Updated:** 2025-01-13
+**Last Updated:** 2025-11-14
 
-**Current Status:** Repository created locally, ready to push to GitHub
+**Current Status:** Direct deployment testing to Azure Government Cloud
 
-**Blocking Issues:**
-- GitHub repository must be created manually (Enterprise Managed User limitation)
-- GitHub secrets must be configured before CI/CD will work
+**Recent Progress:**
+- Successfully deployed infrastructure to test resource group `rg-icarus-direct-test`
+- Backend URL: `https://ai-icarus-test-64zh3jgmqiqxe-backend.azurewebsites.us`
+- Frontend URL: `https://ai-icarus-test-64zh3jgmqiqxe-frontend.azurewebsites.us`
+- Currently deploying backend code using `az webapp up`
+
+**Known Issues:**
+- CI/CD pipeline failing at backend deployment step (startup timeout)
+- Issue appears to be with gunicorn/worker process startup configuration
+- Agent Framework packages may be causing dependency issues
+
+**Troubleshooting Attempts:**
+1. ✅ Added gunicorn to requirements.txt
+2. ✅ Configured appCommandLine in Bicep with gunicorn startup
+3. ❌ Added startup.sh script (caused timeout, removed)
+4. ✅ Simplified startup command with `python -m gunicorn`
+5. 🔄 Testing direct deployment to Azure to isolate CI/CD vs app issues
 
 **Next Session Should:**
-1. Confirm GitHub repository created
-2. Verify GitHub secrets configured
-3. Push code and monitor first CI/CD run
-4. Begin implementing full backend FastAPI application
-5. Begin implementing frontend React application
+1. Complete direct deployment testing and verify health endpoint
+2. Fix any remaining startup issues identified during direct deployment
+3. Update CI/CD pipeline configuration based on successful direct deployment
+4. Test complete deployment through GitHub commit
+5. Begin implementing full Agent Framework integration

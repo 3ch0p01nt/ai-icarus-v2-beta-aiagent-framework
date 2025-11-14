@@ -1,6 +1,8 @@
 # Microsoft Agent Framework
-agent-framework-core>=1.0.0b1
-agent-framework-azure-ai>=1.0.0b1
+# NOTE: These packages are not yet available in PyPI
+# Uncomment when they become available
+# agent-framework-core>=1.0.0b1
+# agent-framework-azure-ai>=1.0.0b1
 
 # Web Framework
 fastapi>=0.104.0
