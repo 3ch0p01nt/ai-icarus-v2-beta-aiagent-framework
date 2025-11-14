@@ -79,22 +79,20 @@ jobs:
           echo "   Backend: $BACKEND_URL ($BACKEND_APP_NAME)"
           echo "   Frontend: $FRONTEND_URL"
 
-      - name: 🐍 Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: 📦 Install Backend Dependencies
+      - name: 🚀 Deploy Backend with Oryx Build
         run: |
           cd backend
-          python -m pip install --upgrade pip
-          pip install --target=".python_packages/lib/site-packages" -r requirements.txt
+          zip -r deploy.zip .
 
-      - name: 🚀 Deploy Backend
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: ${{ steps.deploy.outputs.backend_app_name }}
-          package: backend
+          echo "Deploying backend to ${{ steps.deploy.outputs.backend_app_name }}"
+          az webapp deploy \
+            --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
+            --name ${{ steps.deploy.outputs.backend_app_name }} \
+            --src-path deploy.zip \
+            --type zip \
+            --async false
+
+          echo "✅ Backend deployed - Oryx will build and install dependencies"
 
       - name: ⚛️ Setup Node.js
         uses: actions/setup-node@v4
