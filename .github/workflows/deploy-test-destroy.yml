@@ -67,79 +67,23 @@ jobs:
             --name main \
             --query properties.outputs.frontendUrl.value -o tsv)
 
+          # Extract app name from backend URL (e.g., https://app-name.azurewebsites.us -> app-name)
+          BACKEND_APP_NAME=$(echo $BACKEND_URL | sed 's|https://||' | sed 's|\.azurewebsites\.us.*||')
+
           echo "backend_url=$BACKEND_URL" >> $GITHUB_OUTPUT
+          echo "backend_app_name=$BACKEND_APP_NAME" >> $GITHUB_OUTPUT
           echo "frontend_url=$FRONTEND_URL" >> $GITHUB_OUTPUT
           echo "resource_group=${{ steps.generate-rg.outputs.resource_group }}" >> $GITHUB_OUTPUT
 
           echo "✅ Infrastructure deployed successfully"
-          echo "   Backend: $BACKEND_URL"
+          echo "   Backend: $BACKEND_URL ($BACKEND_APP_NAME)"
           echo "   Frontend: $FRONTEND_URL"
 
-      - name: 🐍 Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
       - name: 📦 Deploy Backend
-        run: |
-          cd backend
-
-          echo "Creating deployment package..."
-          zip -r deploy.zip . -x "*.git*" "*__pycache__*" "*.venv*" "*tests*" "*.azure*"
-
-          echo "Getting App Service name..."
-          APP_NAME=$(az webapp list \
-            --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
-            --query "[0].name" -o tsv)
-
-          echo "Getting publishing credentials..."
-          CREDS=$(az webapp deployment list-publishing-credentials \
-            --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
-            --name $APP_NAME \
-            --query "{username:publishingUserName, password:publishingPassword}" -o json)
-
-          USERNAME=$(echo $CREDS | jq -r '.username')
-          PASSWORD=$(echo $CREDS | jq -r '.password')
-
-          # Create base64-encoded auth header to handle special characters in password
-          AUTH_HEADER=$(echo -n "$USERNAME:$PASSWORD" | base64)
-
-          echo "Deploying to App Service via ZipDeploy API: $APP_NAME"
-          HTTP_STATUS=$(curl -X POST \
-            -H "Authorization: Basic $AUTH_HEADER" \
-            -H "Content-Type: application/zip" \
-            --data-binary @deploy.zip \
-            -w "%{http_code}" \
-            -o /tmp/deploy-response.txt \
-            "https://$APP_NAME.scm.azurewebsites.us/api/zipdeploy?isAsync=true")
-
-          echo "Deploy API returned status: $HTTP_STATUS"
-          cat /tmp/deploy-response.txt
-
-          if [ "$HTTP_STATUS" -ne 200 ] && [ "$HTTP_STATUS" -ne 202 ]; then
-            echo "❌ Deployment failed with status $HTTP_STATUS"
-            exit 1
-          fi
-
-          echo "⏳ Waiting for Oryx build to complete..."
-          for i in {1..60}; do
-            sleep 5
-            STATUS=$(curl -s -H "Authorization: Basic $AUTH_HEADER" \
-              "https://$APP_NAME.scm.azurewebsites.us/api/deployments/latest" \
-              | jq -r '.status // "unknown"')
-
-            echo "Build status (attempt $i/60): $STATUS"
-
-            if [ "$STATUS" == "4" ] || [ "$STATUS" == "success" ]; then
-              echo "✅ Backend deployed and built successfully"
-              exit 0
-            elif [ "$STATUS" == "3" ] || [ "$STATUS" == "failed" ]; then
-              echo "❌ Build failed"
-              exit 1
-            fi
-          done
-
-          echo "⚠️ Deployment status check timed out, but may still succeed"
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ steps.deploy.outputs.backend_app_name }}
+          package: backend
 
       - name: ⚛️ Setup Node.js
         uses: actions/setup-node@v4
