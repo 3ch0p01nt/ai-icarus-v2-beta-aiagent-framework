@@ -5,6 +5,7 @@ agent-framework-azure-ai>=1.0.0b1
 # Web Framework
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
+gunicorn>=21.2.0
 python-multipart>=0.0.6
 
 # Azure SDKs
