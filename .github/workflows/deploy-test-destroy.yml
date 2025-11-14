@@ -84,22 +84,27 @@ jobs:
         run: |
           cd backend
 
-          echo "Installing dependencies..."
-          pip install -r requirements.txt
-
           echo "Creating deployment package..."
-          zip -r deploy.zip . -x "*.git*" "*__pycache__*" "*.venv*" "*tests*"
+          zip -r deploy.zip . -x "*.git*" "*__pycache__*" "*.venv*" "*tests*" "*.azure*"
 
           echo "Getting App Service name..."
           APP_NAME=$(az webapp list \
             --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
             --query "[0].name" -o tsv)
 
+          echo "Enabling Azure Oryx build during deployment..."
+          az webapp config appsettings set \
+            --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
+            --name $APP_NAME \
+            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true \
+            --output none
+
           echo "Deploying to App Service: $APP_NAME"
           az webapp deployment source config-zip \
             --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
             --name $APP_NAME \
-            --src deploy.zip
+            --src deploy.zip \
+            --timeout 600
 
           echo "✅ Backend deployed successfully"
 
