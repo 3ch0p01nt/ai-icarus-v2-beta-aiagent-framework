@@ -80,20 +80,32 @@ jobs:
           echo "   Backend: $BACKEND_URL ($BACKEND_APP_NAME)"
           echo "   Frontend: $FRONTEND_URL"
 
-      - name: 🚀 Deploy Backend with config-zip
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install dependencies locally
+        run: |
+          cd backend
+          echo "Installing Python dependencies to .python_packages/lib/site-packages..."
+          pip install --target=".python_packages/lib/site-packages" -r requirements.txt
+          echo "✅ Dependencies installed successfully"
+
+      - name: 🚀 Deploy Backend with pre-built dependencies
         run: |
           cd backend
 
-          echo "Creating deployment package..."
+          echo "Creating deployment package with pre-built dependencies..."
           zip -r deploy.zip . -x "*.git*" -x "__pycache__/*" -x "*.pyc" -x ".venv/*"
 
-          echo "Deploying via config-zip (triggers Oryx build with SCM_DO_BUILD_DURING_DEPLOYMENT)..."
+          echo "Deploying via config-zip with pre-built dependencies..."
           az webapp deployment source config-zip \
             --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
             --name ${{ steps.deploy.outputs.backend_app_name }} \
             --src deploy.zip
 
-          echo "✅ Deployment completed - Oryx build triggered by SCM_DO_BUILD_DURING_DEPLOYMENT setting"
+          echo "✅ Deployment completed - dependencies pre-installed in CI/CD"
 
       - name: ⚛️ Setup Node.js
         uses: actions/setup-node@v4

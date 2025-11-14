@@ -95,7 +95,7 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
       appSettings: [
         {
           name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
-          value: 'true'
+          value: 'false'
         }
         {
           name: 'AZURE_CLIENT_ID'
