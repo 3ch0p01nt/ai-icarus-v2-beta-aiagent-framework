@@ -87,7 +87,7 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
       minTlsVersion: '1.2'
       http20Enabled: true
       cors: corsConfig
-      appCommandLine: 'python -m gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 600 --worker-class uvicorn.workers.UvicornWorker main:app'
+      appCommandLine: 'python -m uvicorn main:app --host 0.0.0.0 --port 8000'
       appSettings: [
         {
           name: 'AZURE_CLIENT_ID'
