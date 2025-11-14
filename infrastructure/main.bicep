@@ -25,8 +25,12 @@ param azureAdTenantId string
 @description('Azure OpenAI Endpoint')
 param azureOpenAiEndpoint string = ''
 
+@description('Azure OpenAI API Key')
+@secure()
+param azureOpenAiApiKey string = ''
+
 @description('Azure OpenAI Deployment Name')
-param azureOpenAiDeployment string = 'gpt-4o'
+param azureOpenAiDeployment string = 'gpt-4o-mini'
 
 @description('Deployment timestamp')
 param deploymentTimestamp string = utcNow('yyyy-MM-dd')
@@ -108,6 +112,10 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
         {
           name: 'AZURE_OPENAI_ENDPOINT'
           value: azureOpenAiEndpoint
+        }
+        {
+          name: 'AZURE_OPENAI_API_KEY'
+          value: azureOpenAiApiKey
         }
         {
           name: 'AZURE_OPENAI_DEPLOYMENT_NAME'
