@@ -91,7 +91,7 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
       minTlsVersion: '1.2'
       http20Enabled: true
       cors: corsConfig
-      appCommandLine: 'gunicorn -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --timeout 600 --access-logfile \'-\' --error-logfile \'-\' main:app'
+      appCommandLine: 'PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages:$PYTHONPATH gunicorn -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --timeout 600 --access-logfile \'-\' --error-logfile \'-\' main:app'
       appSettings: [
         {
           name: 'PYTHONPATH'
