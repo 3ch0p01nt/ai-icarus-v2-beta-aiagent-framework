@@ -98,6 +98,14 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
           value: 'true'
         }
         {
+          name: 'ENABLE_ORYX_BUILD'
+          value: 'true'
+        }
+        {
+          name: 'WEBSITE_DISABLE_SCM_SEPARATION'
+          value: 'true'
+        }
+        {
           name: 'AZURE_CLIENT_ID'
           value: azureAdClientId
         }
