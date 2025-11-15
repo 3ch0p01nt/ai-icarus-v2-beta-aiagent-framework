@@ -101,9 +101,12 @@ jobs:
           USERNAME=$(echo $PUBLISH_PROFILE | jq -r '.username')
           PASSWORD=$(echo $PUBLISH_PROFILE | jq -r '.password')
 
+          # Create base64 encoded credentials for Basic Auth
+          AUTH_HEADER=$(echo -n "$USERNAME:$PASSWORD" | base64)
+
           echo "Deploying via ZipDeploy API (triggers Oryx build)..."
           DEPLOY_RESPONSE=$(curl -X POST \
-            -u "$USERNAME:$PASSWORD" \
+            -H "Authorization: Basic $AUTH_HEADER" \
             -H "Content-Type: application/zip" \
             --data-binary "@deploy.zip" \
             -w "\n%{http_code}" \
@@ -123,7 +126,7 @@ jobs:
           echo "Polling deployment status..."
           for i in {1..60}; do
             STATUS=$(curl -s \
-              -u "$USERNAME:$PASSWORD" \
+              -H "Authorization: Basic $AUTH_HEADER" \
               "https://${{ steps.deploy.outputs.backend_app_name }}.scm.azurewebsites.us/api/deployments/latest" | jq -r '.status // "Unknown"')
 
             echo "Build status (attempt $i/60): $STATUS"
