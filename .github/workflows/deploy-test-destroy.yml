@@ -102,12 +102,44 @@ jobs:
           PASSWORD=$(echo $PUBLISH_PROFILE | jq -r '.password')
 
           echo "Deploying via ZipDeploy API (triggers Oryx build)..."
-          curl -X POST \
+          DEPLOY_RESPONSE=$(curl -X POST \
             -u "$USERNAME:$PASSWORD" \
-            -F "package=@deploy.zip" \
-            "https://${{ steps.deploy.outputs.backend_app_name }}.scm.azurewebsites.us/api/zipdeploy"
+            -H "Content-Type: application/zip" \
+            --data-binary "@deploy.zip" \
+            -w "\n%{http_code}" \
+            "https://${{ steps.deploy.outputs.backend_app_name }}.scm.azurewebsites.us/api/zipdeploy?isAsync=true")
 
-          echo "✅ Deployment completed - Oryx will build dependencies from requirements.txt"
+          HTTP_CODE=$(echo "$DEPLOY_RESPONSE" | tail -n1)
+          RESPONSE_BODY=$(echo "$DEPLOY_RESPONSE" | head -n-1)
+
+          echo "Deploy HTTP Status: $HTTP_CODE"
+          echo "Response: $RESPONSE_BODY"
+
+          if [ "$HTTP_CODE" != "202" ] && [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ Deployment failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          echo "Polling deployment status..."
+          for i in {1..60}; do
+            STATUS=$(curl -s \
+              -u "$USERNAME:$PASSWORD" \
+              "https://${{ steps.deploy.outputs.backend_app_name }}.scm.azurewebsites.us/api/deployments/latest" | jq -r '.status // "Unknown"')
+
+            echo "Build status (attempt $i/60): $STATUS"
+
+            if [ "$STATUS" == "4" ] || [ "$STATUS" == "Success" ]; then
+              echo "✅ Build completed successfully"
+              break
+            elif [ "$STATUS" == "3" ] || [ "$STATUS" == "Failed" ]; then
+              echo "❌ Build failed"
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          echo "✅ Deployment completed - dependencies built by Oryx"
 
       - name: ⚛️ Setup Node.js
         uses: actions/setup-node@v4
