@@ -94,16 +94,8 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
       appCommandLine: 'gunicorn -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --timeout 600 --access-logfile \'-\' --error-logfile \'-\' main:app'
       appSettings: [
         {
-          name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
-          value: 'true'
-        }
-        {
-          name: 'ENABLE_ORYX_BUILD'
-          value: 'true'
-        }
-        {
-          name: 'WEBSITE_DISABLE_SCM_SEPARATION'
-          value: 'true'
+          name: 'PYTHONPATH'
+          value: '/home/site/wwwroot/.python_packages/lib/site-packages'
         }
         {
           name: 'AZURE_CLIENT_ID'
