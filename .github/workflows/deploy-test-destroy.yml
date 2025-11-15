@@ -197,7 +197,7 @@ jobs:
 
           RESPONSE=$(curl -s $API_URL)
 
-          if echo "$RESPONSE" | grep -q "azureEnvironment"; then
+          if echo "$RESPONSE" | grep -q "environment"; then
             echo "✅ API endpoints responding correctly"
             echo "Response: $RESPONSE"
           else
