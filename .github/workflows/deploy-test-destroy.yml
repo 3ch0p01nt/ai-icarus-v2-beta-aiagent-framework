@@ -85,27 +85,29 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 📦 Install dependencies locally
-        run: |
-          cd backend
-          echo "Installing Python dependencies to __oryx_packages__/lib..."
-          pip install --target="__oryx_packages__/lib" -r requirements.txt
-          echo "✅ Dependencies installed successfully"
-
-      - name: 🚀 Deploy Backend with pre-built dependencies
+      - name: 🚀 Deploy Backend (Oryx will build dependencies)
         run: |
           cd backend
 
-          echo "Creating deployment package with pre-built dependencies..."
+          echo "Creating deployment package (Oryx will install dependencies from requirements.txt)..."
           zip -r deploy.zip . -x "*.git*" -x "__pycache__/*" -x "*.pyc" -x ".venv/*"
 
-          echo "Deploying via config-zip with pre-built dependencies..."
-          az webapp deployment source config-zip \
+          echo "Getting publishing credentials..."
+          PUBLISH_PROFILE=$(az webapp deployment list-publishing-credentials \
             --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
             --name ${{ steps.deploy.outputs.backend_app_name }} \
-            --src deploy.zip
+            --query "{username:publishingUserName, password:publishingPassword}" -o json)
 
-          echo "✅ Deployment completed - dependencies pre-installed in CI/CD"
+          USERNAME=$(echo $PUBLISH_PROFILE | jq -r '.username')
+          PASSWORD=$(echo $PUBLISH_PROFILE | jq -r '.password')
+
+          echo "Deploying via ZipDeploy API (triggers Oryx build)..."
+          curl -X POST \
+            -u "$USERNAME:$PASSWORD" \
+            -F "package=@deploy.zip" \
+            "https://${{ steps.deploy.outputs.backend_app_name }}.scm.azurewebsites.us/api/zipdeploy"
+
+          echo "✅ Deployment completed - Oryx will build dependencies from requirements.txt"
 
       - name: ⚛️ Setup Node.js
         uses: actions/setup-node@v4
