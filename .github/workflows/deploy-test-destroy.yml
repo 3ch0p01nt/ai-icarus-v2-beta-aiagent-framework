@@ -147,8 +147,8 @@ jobs:
     steps:
       - name: ⏳ Wait for services to start
         run: |
-          echo "Waiting 90 seconds for services to fully start..."
-          sleep 90
+          echo "Waiting 120 seconds for services to fully start..."
+          sleep 120
 
       - name: 🔍 Check backend health
         run: |
