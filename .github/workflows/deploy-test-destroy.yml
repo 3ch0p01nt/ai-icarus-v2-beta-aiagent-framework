@@ -88,8 +88,8 @@ jobs:
       - name: 📦 Install dependencies locally
         run: |
           cd backend
-          echo "Installing Python dependencies to .python_packages/lib/site-packages..."
-          pip install --target=".python_packages/lib/site-packages" -r requirements.txt
+          echo "Installing Python dependencies to __oryx_packages__/lib..."
+          pip install --target="__oryx_packages__/lib" -r requirements.txt
           echo "✅ Dependencies installed successfully"
 
       - name: 🚀 Deploy Backend with pre-built dependencies
