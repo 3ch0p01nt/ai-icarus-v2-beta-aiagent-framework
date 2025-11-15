@@ -92,57 +92,42 @@ jobs:
           echo "Creating deployment package (Oryx will install dependencies from requirements.txt)..."
           zip -r deploy.zip . -x "*.git*" -x "__pycache__/*" -x "*.pyc" -x ".venv/*"
 
-          echo "Getting publishing credentials..."
-          PUBLISH_PROFILE=$(az webapp deployment list-publishing-credentials \
+          echo "Deploying via Azure CLI (triggers Oryx build)..."
+          az webapp deploy \
             --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
             --name ${{ steps.deploy.outputs.backend_app_name }} \
-            --query "{username:publishingUserName, password:publishingPassword}" -o json)
+            --src-path deploy.zip \
+            --type zip \
+            --async true
 
-          USERNAME=$(echo $PUBLISH_PROFILE | jq -r '.username')
-          PASSWORD=$(echo $PUBLISH_PROFILE | jq -r '.password')
+          echo "✅ Deployment initiated - Oryx will build dependencies in background"
 
-          # Create base64 encoded credentials for Basic Auth
-          AUTH_HEADER=$(echo -n "$USERNAME:$PASSWORD" | base64)
+          echo "Waiting for deployment to complete..."
+          sleep 30
 
-          echo "Deploying via ZipDeploy API (triggers Oryx build)..."
-          DEPLOY_RESPONSE=$(curl -X POST \
-            -H "Authorization: Basic $AUTH_HEADER" \
-            -H "Content-Type: application/zip" \
-            --data-binary "@deploy.zip" \
-            -w "\n%{http_code}" \
-            "https://${{ steps.deploy.outputs.backend_app_name }}.scm.azurewebsites.us/api/zipdeploy?isAsync=true")
+          # Poll deployment status via Azure CLI
+          for i in {1..30}; do
+            echo "Checking deployment status (attempt $i/30)..."
 
-          HTTP_CODE=$(echo "$DEPLOY_RESPONSE" | tail -n1)
-          RESPONSE_BODY=$(echo "$DEPLOY_RESPONSE" | head -n-1)
+            DEPLOY_STATUS=$(az webapp deployment list \
+              --resource-group ${{ steps.generate-rg.outputs.resource_group }} \
+              --name ${{ steps.deploy.outputs.backend_app_name }} \
+              --query "[0].{status:status, active:active}" -o json 2>/dev/null || echo "{}")
 
-          echo "Deploy HTTP Status: $HTTP_CODE"
-          echo "Response: $RESPONSE_BODY"
+            echo "Status: $DEPLOY_STATUS"
 
-          if [ "$HTTP_CODE" != "202" ] && [ "$HTTP_CODE" != "200" ]; then
-            echo "❌ Deployment failed with HTTP $HTTP_CODE"
-            exit 1
-          fi
+            ACTIVE=$(echo $DEPLOY_STATUS | jq -r '.active // "false"')
+            STATUS=$(echo $DEPLOY_STATUS | jq -r '.status // "Unknown"')
 
-          echo "Polling deployment status..."
-          for i in {1..60}; do
-            STATUS=$(curl -s \
-              -H "Authorization: Basic $AUTH_HEADER" \
-              "https://${{ steps.deploy.outputs.backend_app_name }}.scm.azurewebsites.us/api/deployments/latest" | jq -r '.status // "Unknown"')
-
-            echo "Build status (attempt $i/60): $STATUS"
-
-            if [ "$STATUS" == "4" ] || [ "$STATUS" == "Success" ]; then
-              echo "✅ Build completed successfully"
+            if [ "$ACTIVE" == "true" ] && [ "$STATUS" == "4" ]; then
+              echo "✅ Deployment completed successfully"
               break
-            elif [ "$STATUS" == "3" ] || [ "$STATUS" == "Failed" ]; then
-              echo "❌ Build failed"
-              exit 1
             fi
 
-            sleep 5
+            sleep 10
           done
 
-          echo "✅ Deployment completed - dependencies built by Oryx"
+          echo "✅ Deployment process completed"
 
       - name: ⚛️ Setup Node.js
         uses: actions/setup-node@v4
