@@ -78,12 +78,20 @@ jobs:
             --name main \
             --query properties.outputs.frontendUrl.value -o tsv)
 
-          # Extract app name from backend URL
-          BACKEND_APP_NAME=$(echo $BACKEND_URL | sed 's|https://||' | sed 's|\.azurewebsites\.us.*||')
+          BACKEND_APP_NAME=$(az deployment group show \
+            --resource-group ${{ github.event.inputs.resource_group }} \
+            --name main \
+            --query properties.outputs.appServiceName.value -o tsv)
+
+          FRONTEND_APP_NAME=$(az deployment group show \
+            --resource-group ${{ github.event.inputs.resource_group }} \
+            --name main \
+            --query properties.outputs.frontendAppServiceName.value -o tsv)
 
           echo "backend_url=$BACKEND_URL" >> $GITHUB_OUTPUT
           echo "backend_app_name=$BACKEND_APP_NAME" >> $GITHUB_OUTPUT
           echo "frontend_url=$FRONTEND_URL" >> $GITHUB_OUTPUT
+          echo "frontend_app_name=$FRONTEND_APP_NAME" >> $GITHUB_OUTPUT
 
           echo "✅ Infrastructure deployed successfully"
           echo "   Backend: $BACKEND_URL ($BACKEND_APP_NAME)"
@@ -135,15 +143,10 @@ jobs:
           zip -r ../deploy.zip .
           cd ..
 
-          echo "Getting Frontend App Service name..."
-          FRONTEND_APP_NAME=$(az webapp list \
-            --resource-group ${{ github.event.inputs.resource_group }} \
-            --query "[?contains(name, 'frontend')].name" -o tsv)
-
-          echo "Deploying to Frontend App Service: $FRONTEND_APP_NAME"
+          echo "Deploying to Frontend App Service: ${{ steps.deploy.outputs.frontend_app_name }}"
           az webapp deployment source config-zip \
             --resource-group ${{ github.event.inputs.resource_group }} \
-            --name $FRONTEND_APP_NAME \
+            --name ${{ steps.deploy.outputs.frontend_app_name }} \
             --src deploy.zip
 
           echo "✅ Frontend deployed successfully"
