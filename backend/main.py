@@ -92,6 +92,63 @@ async def get_config():
         "deployment": os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o-mini")
     }
 
+# Hello World AI Test endpoint
+@app.get("/api/hello")
+async def hello_ai():
+    """
+    Hello World endpoint that tests Azure OpenAI integration.
+    Sends a simple test message to the AI and returns the response.
+    """
+    if not azure_client:
+        return {
+            "status": "no_ai_configured",
+            "message": "Hello World from AI Icarus V2 Beta!",
+            "note": "Azure OpenAI is not configured. Set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY to enable AI features.",
+            "test_prompt": "Tell me a short joke about cloud computing",
+            "ai_response": None
+        }
+
+    try:
+        # Send a test message to Azure OpenAI
+        test_prompt = "Tell me a short joke about cloud computing"
+        deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o-mini")
+
+        response = azure_client.chat.completions.create(
+            model=deployment_name,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant working on Azure Government cloud."},
+                {"role": "user", "content": test_prompt}
+            ],
+            temperature=0.7,
+            max_tokens=150
+        )
+
+        # Extract response
+        ai_message = response.choices[0].message.content
+
+        return {
+            "status": "success",
+            "message": "Hello World from AI Icarus V2 Beta!",
+            "cloud": "Azure US Government",
+            "deployment": deployment_name,
+            "test_prompt": test_prompt,
+            "ai_response": ai_message,
+            "usage": {
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens
+            }
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": "Hello World from AI Icarus V2 Beta!",
+            "test_prompt": "Tell me a short joke about cloud computing",
+            "ai_response": None,
+            "error": str(e)
+        }
+
 # Chat endpoint
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
