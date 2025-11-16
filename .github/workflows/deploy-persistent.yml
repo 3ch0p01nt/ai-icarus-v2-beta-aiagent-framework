@@ -27,6 +27,8 @@ jobs:
     outputs:
       backend-url: ${{ steps.deploy.outputs.backend_url }}
       frontend-url: ${{ steps.deploy.outputs.frontend_url }}
+      key_vault_name: ${{ steps.deploy.outputs.key_vault_name }}
+      key_vault_uri: ${{ steps.deploy.outputs.key_vault_uri }}
 
     steps:
       - name: 📥 Checkout code
@@ -56,6 +58,7 @@ jobs:
         id: deploy
         run: |
           echo "Deploying Bicep template to ${{ github.event.inputs.resource_group }}..."
+          echo "🔐 Azure OpenAI API Key will be stored in Key Vault (not as environment variable)"
           az deployment group create \
             --resource-group ${{ github.event.inputs.resource_group }} \
             --template-file infrastructure/main.bicep \
@@ -88,14 +91,27 @@ jobs:
             --name main \
             --query properties.outputs.frontendAppServiceName.value -o tsv)
 
+          KEY_VAULT_NAME=$(az deployment group show \
+            --resource-group ${{ github.event.inputs.resource_group }} \
+            --name main \
+            --query properties.outputs.keyVaultName.value -o tsv)
+
+          KEY_VAULT_URI=$(az deployment group show \
+            --resource-group ${{ github.event.inputs.resource_group }} \
+            --name main \
+            --query properties.outputs.keyVaultUri.value -o tsv)
+
           echo "backend_url=$BACKEND_URL" >> $GITHUB_OUTPUT
           echo "backend_app_name=$BACKEND_APP_NAME" >> $GITHUB_OUTPUT
           echo "frontend_url=$FRONTEND_URL" >> $GITHUB_OUTPUT
           echo "frontend_app_name=$FRONTEND_APP_NAME" >> $GITHUB_OUTPUT
+          echo "key_vault_name=$KEY_VAULT_NAME" >> $GITHUB_OUTPUT
+          echo "key_vault_uri=$KEY_VAULT_URI" >> $GITHUB_OUTPUT
 
           echo "✅ Infrastructure deployed successfully"
           echo "   Backend: $BACKEND_URL ($BACKEND_APP_NAME)"
           echo "   Frontend: $FRONTEND_URL"
+          echo "   Key Vault: $KEY_VAULT_NAME ($KEY_VAULT_URI)"
 
       - name: 🐍 Setup Python
         uses: actions/setup-python@v4
@@ -222,8 +238,15 @@ jobs:
           echo "   Backend:  ${{ needs.deploy.outputs.backend-url }}"
           echo "   Frontend: ${{ needs.deploy.outputs.frontend-url }}"
           echo ""
+          echo "🔐 Key Vault (Secure Secrets Storage):"
+          echo "   Name: ${{ needs.deploy.outputs.key_vault_name }}"
+          echo "   URI:  ${{ needs.deploy.outputs.key_vault_uri }}"
+          echo "   Secrets: azure-openai-api-key"
+          echo ""
           echo "📝 Important:"
           echo "   - Resources are PERSISTENT and will NOT be auto-deleted"
+          echo "   - Azure OpenAI API Key is stored in Key Vault (not as env var)"
+          echo "   - Backend uses Managed Identity to access Key Vault"
           echo "   - Remember to delete when done to avoid costs"
           echo ""
           echo "🗑️ To delete manually:"

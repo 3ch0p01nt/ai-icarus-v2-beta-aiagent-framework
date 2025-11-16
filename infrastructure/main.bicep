@@ -81,6 +81,9 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
   name: '${appNamePrefix}-backend'
   location: location
   tags: commonTags
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     serverFarmId: appServicePlan.id
     httpsOnly: true
@@ -119,7 +122,7 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
         }
         {
           name: 'AZURE_OPENAI_API_KEY'
-          value: azureOpenAiApiKey
+          value: '@Microsoft.KeyVault(SecretUri=${openAiApiKeySecret.properties.secretUri})'
         }
         {
           name: 'AZURE_OPENAI_DEPLOYMENT_NAME'
@@ -143,6 +146,51 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
         }
       ]
     }
+  }
+}
+
+// Key Vault for secure secret storage
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
+  name: '${appNamePrefix}-kv'
+  location: location
+  tags: commonTags
+  properties: {
+    enabledForDeployment: false
+    enabledForDiskEncryption: false
+    enabledForTemplateDeployment: true
+    tenantId: subscription().tenantId
+    enableRbacAuthorization: false
+    accessPolicies: [
+      // Access policy for App Service Managed Identity (added after App Service is created)
+      {
+        tenantId: subscription().tenantId
+        objectId: appService.identity.principalId
+        permissions: {
+          secrets: [
+            'get'
+            'list'
+          ]
+        }
+      }
+    ]
+    sku: {
+      name: 'standard'
+      family: 'A'
+    }
+    networkAcls: {
+      defaultAction: 'Allow'
+      bypass: 'AzureServices'
+    }
+  }
+}
+
+// Key Vault Secret for Azure OpenAI API Key
+resource openAiApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'azure-openai-api-key'
+  properties: {
+    value: azureOpenAiApiKey
+    contentType: 'text/plain'
   }
 }
 
@@ -196,3 +244,5 @@ output frontendAppServiceName string = frontendAppService.name
 output resourceGroupName string = resourceGroup().name
 output appInsightsInstrumentationKey string = appInsights.properties.InstrumentationKey
 output appInsightsConnectionString string = appInsights.properties.ConnectionString
+output keyVaultName string = keyVault.name
+output keyVaultUri string = keyVault.properties.vaultUri
