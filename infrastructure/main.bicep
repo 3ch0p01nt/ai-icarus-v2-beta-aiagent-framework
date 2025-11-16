@@ -150,8 +150,9 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
 }
 
 // Key Vault for secure secret storage (created first, no access policies yet)
+// Key Vault names must be 3-24 characters, so use shorter naming
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
-  name: '${appNamePrefix}-kv'
+  name: 'kv-${uniqueString(resourceGroup().id)}'
   location: location
   tags: commonTags
   properties: {
