@@ -122,7 +122,7 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
         }
         {
           name: 'AZURE_OPENAI_API_KEY'
-          value: '@Microsoft.KeyVault(SecretUri=${openAiApiKeySecret.properties.secretUri})'
+          value: azureOpenAiApiKey  // Will be replaced with Key Vault reference after deployment
         }
         {
           name: 'AZURE_OPENAI_DEPLOYMENT_NAME'
@@ -149,7 +149,7 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
   }
 }
 
-// Key Vault for secure secret storage
+// Key Vault for secure secret storage (created first, no access policies yet)
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: '${appNamePrefix}-kv'
   location: location
@@ -160,19 +160,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enabledForTemplateDeployment: true
     tenantId: subscription().tenantId
     enableRbacAuthorization: false
-    accessPolicies: [
-      // Access policy for App Service Managed Identity (added after App Service is created)
-      {
-        tenantId: subscription().tenantId
-        objectId: appService.identity.principalId
-        permissions: {
-          secrets: [
-            'get'
-            'list'
-          ]
-        }
-      }
-    ]
+    accessPolicies: []  // Empty initially - will be added later
     sku: {
       name: 'standard'
       family: 'A'
@@ -191,6 +179,27 @@ resource openAiApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   properties: {
     value: azureOpenAiApiKey
     contentType: 'text/plain'
+  }
+}
+
+// Key Vault Access Policy for App Service Managed Identity
+// This must be a separate resource to avoid circular dependency
+resource keyVaultAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = {
+  parent: keyVault
+  name: 'add'
+  properties: {
+    accessPolicies: [
+      {
+        tenantId: subscription().tenantId
+        objectId: appService.identity.principalId
+        permissions: {
+          secrets: [
+            'get'
+            'list'
+          ]
+        }
+      }
+    ]
   }
 }
 
