@@ -113,6 +113,22 @@ jobs:
           echo "   Frontend: $FRONTEND_URL"
           echo "   Key Vault: $KEY_VAULT_NAME ($KEY_VAULT_URI)"
 
+      - name: 🔐 Update API Key to use Key Vault reference
+        run: |
+          echo "Updating AZURE_OPENAI_API_KEY to use Key Vault reference..."
+
+          # Get the secret URI
+          SECRET_URI="https://${{ steps.deploy.outputs.key_vault_name }}.vault.usgovcloudapi.net/secrets/azure-openai-api-key"
+
+          # Update the app setting to use Key Vault reference
+          az webapp config appsettings set \
+            --resource-group ${{ github.event.inputs.resource_group }} \
+            --name ${{ steps.deploy.outputs.backend_app_name }} \
+            --settings AZURE_OPENAI_API_KEY="@Microsoft.KeyVault(SecretUri=$SECRET_URI)"
+
+          echo "✅ API Key updated to use Key Vault reference"
+          echo "   Secret URI: $SECRET_URI"
+
       - name: 🐍 Setup Python
         uses: actions/setup-python@v4
         with:
