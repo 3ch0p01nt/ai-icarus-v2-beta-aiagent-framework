@@ -229,7 +229,7 @@ jobs:
         env:
           API_BASE_URL: ${{ needs.deploy.outputs.backend-url }}
           TEST_USER_TOKEN: ${{ secrets.TEST_USER_TOKEN }}
-          AZURE_CLOUD: ${{ env.AZURE_CLOUD }}
+          AZURE_CLOUD: AzureUSGovernment
         run: |
           echo "Running integration tests against: $API_BASE_URL"
           pytest tests/integration/ -v --tb=short --junit-xml=test-results.xml
@@ -245,6 +245,7 @@ jobs:
     name: 🎭 E2E Tests (Playwright)
     needs: [deploy, health-check]
     runs-on: ubuntu-latest
+    if: false  # Skip E2E tests - frontend React app not implemented yet
 
     steps:
       - name: 📥 Checkout code
@@ -288,7 +289,7 @@ jobs:
 
   destroy:
     name: 🗑️ Destroy Resources
-    needs: [deploy, health-check, integration-tests, e2e-tests]
+    needs: [deploy, health-check, integration-tests]
     if: success()
     runs-on: ubuntu-latest
 
@@ -355,7 +356,7 @@ jobs:
 
   notify-failure:
     name: ❌ Notify Failure
-    needs: [deploy, health-check, integration-tests, e2e-tests]
+    needs: [deploy, health-check, integration-tests]
     if: failure()
     runs-on: ubuntu-latest
 
